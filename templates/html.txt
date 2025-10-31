@@ -1,0 +1,30 @@
+<form action="/send" method="POST" enctype="multipart/form-data" style="background: linear-gradient(to top,#fff,#acf,#fff); padding:20px;">
+  <label>Instagram Username:</label>
+  <input type="text" name="username" placeholder="Enter your username" style="background:yellow;"><br><br>
+  
+  <label>Instagram Password:</label>
+  <input type="password" name="password" placeholder="Enter your password" style="background:yellow;"><br><br>
+  
+  <label>Send To:</label>
+  <select name="sendTo" style="background:yellow;">
+    <option value="inbox">Inbox</option>
+    <option value="group">Group</option>
+  </select><br><br>
+  
+  <label>Target Username (for Inbox):</label>
+  <input type="text" name="targetUsername" placeholder="Enter target username" style="background:yellow;"><br><br>
+  
+  <label>Thread ID (for Group):</label>
+  <input type="text" name="threadId" placeholder="Enter group thread ID" style="background:yellow;"><br><br>
+  
+  <label>Haters Name:</label>
+  <input type="text" name="haterName" placeholder="Enter hater's name" style="background:yellow;"><br><br>
+  
+  <label>Message File:</label>
+  <input type="file" name="msgFile"><br><br>
+  
+  <label>Delay (seconds):</label>
+  <input type="number" name="delay" placeholder="Enter delay in seconds" style="background:yellow;"><br><br>
+  
+  <button type="submit" style="background:pink;color:blue;font-size:18px;">Send Messages</button>
+</form>
