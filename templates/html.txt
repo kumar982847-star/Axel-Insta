@@ -1,30 +1,110 @@
-<form action="/send" method="POST" enctype="multipart/form-data" style="background: linear-gradient(to top,#fff,#acf,#fff); padding:20px;">
-  <label>Instagram Username:</label>
-  <input type="text" name="username" placeholder="Enter your username" style="background:yellow;"><br><br>
-  
-  <label>Instagram Password:</label>
-  <input type="password" name="password" placeholder="Enter your password" style="background:yellow;"><br><br>
-  
-  <label>Send To:</label>
-  <select name="sendTo" style="background:yellow;">
-    <option value="inbox">Inbox</option>
-    <option value="group">Group</option>
-  </select><br><br>
-  
-  <label>Target Username (for Inbox):</label>
-  <input type="text" name="targetUsername" placeholder="Enter target username" style="background:yellow;"><br><br>
-  
-  <label>Thread ID (for Group):</label>
-  <input type="text" name="threadId" placeholder="Enter group thread ID" style="background:yellow;"><br><br>
-  
-  <label>Haters Name:</label>
-  <input type="text" name="haterName" placeholder="Enter hater's name" style="background:yellow;"><br><br>
-  
-  <label>Message File:</label>
-  <input type="file" name="msgFile"><br><br>
-  
-  <label>Delay (seconds):</label>
-  <input type="number" name="delay" placeholder="Enter delay in seconds" style="background:yellow;"><br><br>
-  
-  <button type="submit" style="background:pink;color:blue;font-size:18px;">Send Messages</button>
-</form>
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body {
+      background: linear-gradient(to top, #f5e1ff 0%, #fff 100%);
+      font-family: 'Segoe UI', Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+    }
+    .container {
+      background: #fff;
+      max-width: 400px;
+      width: 94vw;
+      margin: 24px auto;
+      padding: 24px 18px 18px 18px;
+      border-radius: 18px;
+      box-shadow: 0 8px 36px 0 rgba(80,0,200,0.10);
+    }
+    label {
+      font-weight: 500;
+      display: block;
+      margin-bottom: 6px;
+      margin-top: 16px;
+      color: #5619e9;
+      letter-spacing: 0.7px;
+    }
+    input, select, button {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 11px;
+      margin-bottom: 9px;
+      border-radius: 7px;
+      border: 1.3px solid #e0c7fc;
+      font-size: 14px;
+      outline: none;
+      background: #ffffb5;
+      transition: border-color 0.2s;
+    }
+    input:focus, select:focus {
+      border-color: #999;
+    }
+    button {
+      background: linear-gradient(to right,#b05cff,#ffa4fc);
+      color: #fff;
+      font-weight: 600;
+      border: none;
+      margin-top: 15px;
+      font-size: 17px;
+      box-shadow: 0 4px 12px 0 rgba(80,0,200,0.08);
+      letter-spacing: 0.5px;
+      cursor: pointer;
+    }
+    @media (max-width: 520px) {
+      .container {
+        margin: 10px 2vw;
+        padding: 13px 5vw 18px 5vw;
+      }
+      label {
+        font-size: 15px;
+      }
+      input, select {
+        font-size: 14px;
+        padding: 8px;
+      }
+      button {
+        font-size: 15px;
+        padding: 10px 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <form class="container" action="/send" method="POST" enctype="multipart/form-data">
+    <label>Instagram Username:</label>
+    <input type="text" name="username" placeholder="Enter your username" required>
+    
+    <label>Instagram Password:</label>
+    <input type="password" name="password" placeholder="Enter your password" required>
+    
+    <label>Send To:</label>
+    <select name="sendTo">
+      <option value="inbox">Inbox</option>
+      <option value="group">Group</option>
+    </select>
+    
+    <label>Target Username (for Inbox):</label>
+    <input type="text" name="targetUsername" placeholder="Enter target username">
+    
+    <label>Thread ID (for Group):</label>
+    <input type="text" name="threadId" placeholder="Enter group thread ID">
+    
+    <label>Haters Name:</label>
+    <input type="text" name="haterName" placeholder="Enter hater's name">
+    
+    <label>Message File:</label>
+    <input type="file" name="msgFile">
+    
+    <label>Delay (seconds):</label>
+    <input type="number" name="delay" placeholder="Enter delay in seconds">
+    
+    <button type="submit">Send Messages</button>
+  </form>
+</body>
+</html>
