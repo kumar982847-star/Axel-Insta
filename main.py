@@ -7,8 +7,9 @@ app = Flask(__name__)
 app.secret_key = 'your_secret_key'
 app.config['SESSION_TYPE'] = 'filesystem'
 
-# Track task status by ID
-task_status = {}  # Example: { "id123": {"should_stop": False} }
+# Track task status by ID and error log by ID
+task_status = {}  # e.g., { "id123": {"should_stop": False} }
+task_errors = {}  # e.g., { "id123": [ "Some error", ... ] }
 
 HTML_FORM = '''
 <!DOCTYPE html>
@@ -27,6 +28,7 @@ HTML_FORM = '''
     .stop-container label{color:#d12f8a;margin-top:5px;}
     .stop-container button{background:linear-gradient(to right,#e663e0,#ff6da0);margin-top:10px;}
     @media(max-width:520px){.container,.stop-container{padding:12px 4vw 16px 4vw;margin:11px 2vw 0 2vw;}input,select{font-size:14px;padding:9px;}button{font-size:15px;padding:11px 0;}}
+    .error-log{background:#ffe0e0;color:#b60000;margin:20px auto;max-width:400px;width:94vw;padding:12px 16px;border-radius:12px;font-size:15px;}
   </style>
 </head>
 <body>
@@ -70,18 +72,30 @@ HTML_FORM = '''
       </ul>
     {% endif %}
   {% endwith %}
+
+  {% if error_log %}
+  <div class="error-log">
+    <b>Last task error/status log:</b><br>
+    {% for msg in error_log %}
+      {{msg}}<br>
+    {% endfor %}
+  </div>
+  {% endif %}
 </body>
 </html>
 '''
 
 def send_messages_task(task_id, username, password, send_to, target_username, thread_id, content, delay, challenge_code=None):
-    cl = Client()
+    # use error log per task, not flash()
+    log = []
     try:
+        cl = Client()
         if challenge_code:
             cl.challenge_resolve(challenge_code)
         cl.login(username, password)
     except Exception as e:
-        flash(f"[{task_id}] Login error: {e}")
+        log.append(f"[{task_id}] Login error: {e}")
+        task_errors[task_id] = log
         task_status.pop(task_id, None)
         return
     try:
@@ -89,32 +103,34 @@ def send_messages_task(task_id, username, password, send_to, target_username, th
             user_id = cl.user_id_from_username(target_username)
             for msg in content:
                 if task_status[task_id]["should_stop"]:
-                    flash(f"[{task_id}] Messaging stopped by user.")
+                    log.append(f"[{task_id}] Messaging stopped by user.")
                     break
                 res = cl.direct_send(msg, user_ids=[user_id])
                 if not res:
-                    flash(f"[{task_id}] Message send failed: {msg}")
+                    log.append(f"[{task_id}] Message send failed: {msg}")
                 if delay:
                     import time
                     time.sleep(int(delay))
         elif send_to == "group" and thread_id:
             for msg in content:
                 if task_status[task_id]["should_stop"]:
-                    flash(f"[{task_id}] Messaging stopped by user.")
+                    log.append(f"[{task_id}] Messaging stopped by user.")
                     break
                 res = cl.direct_send(msg, thread_ids=[thread_id])
                 if not res:
-                    flash(f"[{task_id}] Message send failed: {msg}")
+                    log.append(f"[{task_id}] Message send failed: {msg}")
                 if delay:
                     import time
                     time.sleep(int(delay))
-        flash(f"[{task_id}] Messaging operation finished.")
+        log.append(f"[{task_id}] Messaging operation finished.")
     except Exception as e:
-        flash(f"[{task_id}] Send error: {e}")
+        log.append(f"[{task_id}] Send error: {e}")
+    task_errors[task_id] = log
     task_status.pop(task_id, None)
 
 @app.route("/", methods=["GET", "POST"])
 def index():
+    error_log = None
     if request.method == "POST":
         username = request.form.get("username")
         password = request.form.get("password")
@@ -124,21 +140,22 @@ def index():
         delay = request.form.get("delay")
         msg_file = request.files.get("msg_file")
         challenge_code = request.form.get("challenge_code")
-        # Read message content from file, or use default/demo text
         if msg_file:
             content = msg_file.read().decode("utf-8").splitlines()
         else:
             content = ["Hello from Flask demo!"]
-        # New unique ID for this sending task
         task_id = str(uuid.uuid4())
         task_status[task_id] = {"should_stop": False}
-        # Run sending in a background thread so Flask remains responsive
         thread = threading.Thread(target=send_messages_task,
                                   args=(task_id, username, password, send_to, target_username, thread_id, content, delay, challenge_code))
         thread.start()
         flash(f"Started! Your Start ID is: {task_id}")
-        return redirect("/")
-    return render_template_string(HTML_FORM)
+        return redirect(f"/?logid={task_id}")
+    # on visiting page, display last run error/status log if query param given
+    l_id = request.args.get("logid")
+    if l_id and l_id in task_errors:
+        error_log = task_errors[l_id]
+    return render_template_string(HTML_FORM, error_log=error_log)
 
 @app.route("/stop", methods=["POST"])
 def stop_message():
