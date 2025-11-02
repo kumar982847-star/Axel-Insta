@@ -2,102 +2,58 @@ from flask import Flask, render_template_string, request, redirect, flash, sessi
 from instagrapi import Client
 import threading
 import uuid
+import os
+import time
+import json
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
 app.config['SESSION_TYPE'] = 'filesystem'
 
-# Track task status by ID and error log by ID
-task_status = {}  # e.g., { "id123": {"should_stop": False} }
-task_errors = {}  # e.g., { "id123": [ "Some error", ... ] }
+task_status = {}
+task_errors = {}
 
-HTML_FORM = '''
-<!DOCTYPE html>
-<html>
-<head>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    body {margin:0; padding:0; min-height:100vh; background:linear-gradient(to top,#f5e1ff,#fff);font-family:Segoe UI,Arial,sans-serif;display:flex;flex-direction:column;align-items:center;}
-    .container{background:#fff;max-width:400px;width:94vw;margin:32px auto 0 auto;padding:24px 18px 18px 18px;border-radius:18px;box-shadow:0 8px 36px 0 rgba(80,0,200,0.10);}
-    label{display:block;font-weight:600;margin-bottom:5px;margin-top:15px;color:#5619e9;letter-spacing:.6px;}
-    input,select{width:100%;box-sizing:border-box;padding:10px;margin-bottom:13px;border-radius:7px;border:1.3px solid #e0c7fc;font-size:15px;outline:none;background:#fffb8e;transition:border-color 0.2s;}
-    input[type=file]{background:#fff;border:none;margin-bottom:9px;}
-    input:focus,select:focus{border-color:#b78cff;}
-    button{width:100%;padding:12px 0;background:linear-gradient(to right,#b05cff,#ffa4fc);color:#fff;font-size:17px;font-weight:650;border-radius:7px;border:none; margin-top:20px;letter-spacing:1px;box-shadow:0 4px 12px 0 rgba(80,0,200,0.08);cursor:pointer;}
-    .stop-container{background:#fff0fa;margin-top:32px;max-width:400px;width:94vw;border-radius:18px;box-shadow:0 8px 36px 0 rgba(160,0,100,0.07);padding:18px 18px 16px 18px;display:flex;flex-direction:column;align-items:stretch;}
-    .stop-container label{color:#d12f8a;margin-top:5px;}
-    .stop-container button{background:linear-gradient(to right,#e663e0,#ff6da0);margin-top:10px;}
-    @media(max-width:520px){.container,.stop-container{padding:12px 4vw 16px 4vw;margin:11px 2vw 0 2vw;}input,select{font-size:14px;padding:9px;}button{font-size:15px;padding:11px 0;}}
-    .error-log{background:#ffe0e0;color:#b60000;margin:20px auto;max-width:400px;width:94vw;padding:12px 16px;border-radius:12px;font-size:15px;}
-  </style>
-</head>
-<body>
-  <form class="container" action="/" method="POST" enctype="multipart/form-data">
-    <label>Instagram Username:</label>
-    <input type="text" name="username" placeholder="Enter your username" required>
-    <label>Instagram Password:</label>
-    <input type="password" name="password" placeholder="Enter your password" required>
-    <label>Send To:</label>
-    <select name="send_to">
-      <option value="inbox">Inbox</option>
-      <option value="group">Group</option>
-    </select>
-    <label>Target Username (for Inbox):</label>
-    <input type="text" name="target_username" placeholder="Enter target username">
-    <label>Thread ID (for Group):</label>
-    <input type="text" name="thread_id" placeholder="Enter group thread ID">
-    <label>Haters Name:</label>
-    <input type="text" name="hater_name" placeholder="Enter hater's name">
-    <label>Message File:</label>
-    <input type="file" name="msg_file">
-    <label>Delay (seconds):</label>
-    <input type="number" name="delay" placeholder="Enter delay in seconds">
-    {% if session.get('challenge_required') %}
-      <label>Enter 2FA/Challenge Code:</label>
-      <input type="text" name="challenge_code" required>
-    {% endif %}
-    <button type="submit">Send Messages</button>
-  </form>
-  <form class="stop-container" action="/stop" method="POST">
-    <label>Stop Messaging (by Start ID):</label>
-    <input type="text" name="stop_id" placeholder="Enter your Start ID" required>
-    <button type="submit">Stop</button>
-  </form>
-  {% with messages = get_flashed_messages() %}
-    {% if messages %}
-      <ul>
-        {% for message in messages %}
-          <li>{{ message }}</li>
-        {% endfor %}
-      </ul>
-    {% endif %}
-  {% endwith %}
+HTML_FORM = '''  <!-- same HTML as before -->  '''  # <-- apna original HTML_FORM yahan rahega (no change)
 
-  {% if error_log %}
-  <div class="error-log">
-    <b>Last task error/status log:</b><br>
-    {% for msg in error_log %}
-      {{msg}}<br>
-    {% endfor %}
-  </div>
-  {% endif %}
-</body>
-</html>
-'''
+
+# 🔹 Utility: save/load session for each username
+def get_session_path(username):
+    os.makedirs("sessions", exist_ok=True)
+    return f"sessions/{username}_session.json"
+
+
+def login_with_session(cl, username, password, log):
+    """Try loading old session, else login fresh."""
+    session_path = get_session_path(username)
+    if os.path.exists(session_path):
+        try:
+            cl.load_settings(session_path)
+            cl.login(username, password)
+            log.append(f"[{username}] Logged in via saved session ✅")
+            return True
+        except Exception as e:
+            log.append(f"[{username}] Session load failed: {e} ❌ — retrying fresh login")
+            os.remove(session_path)
+    try:
+        cl.login(username, password)
+        cl.dump_settings(session_path)
+        log.append(f"[{username}] Fresh login successful & session saved ✅")
+        return True
+    except Exception as e:
+        log.append(f"[{username}] Fresh login failed ❌: {e}")
+        return False
+
 
 def send_messages_task(task_id, username, password, send_to, target_username, thread_id, content, delay, challenge_code=None):
-    # use error log per task, not flash()
     log = []
-    try:
-        cl = Client()
-        if challenge_code:
-            cl.challenge_resolve(challenge_code)
-        cl.login(username, password)
-    except Exception as e:
-        log.append(f"[{task_id}] Login error: {e}")
+    cl = Client()
+
+    # login attempt with session support
+    if not login_with_session(cl, username, password, log):
         task_errors[task_id] = log
         task_status.pop(task_id, None)
         return
+
     try:
         if send_to == "inbox" and target_username:
             user_id = cl.user_id_from_username(target_username)
@@ -105,28 +61,32 @@ def send_messages_task(task_id, username, password, send_to, target_username, th
                 if task_status[task_id]["should_stop"]:
                     log.append(f"[{task_id}] Messaging stopped by user.")
                     break
-                res = cl.direct_send(msg, user_ids=[user_id])
-                if not res:
-                    log.append(f"[{task_id}] Message send failed: {msg}")
+                try:
+                    cl.direct_send(msg, user_ids=[user_id])
+                    log.append(f"[{task_id}] Sent to {target_username}: {msg}")
+                except Exception as e:
+                    log.append(f"[{task_id}] Send error: {e}")
                 if delay:
-                    import time
                     time.sleep(int(delay))
         elif send_to == "group" and thread_id:
             for msg in content:
                 if task_status[task_id]["should_stop"]:
                     log.append(f"[{task_id}] Messaging stopped by user.")
                     break
-                res = cl.direct_send(msg, thread_ids=[thread_id])
-                if not res:
-                    log.append(f"[{task_id}] Message send failed: {msg}")
+                try:
+                    cl.direct_send(msg, thread_ids=[thread_id])
+                    log.append(f"[{task_id}] Sent to group thread {thread_id}: {msg}")
+                except Exception as e:
+                    log.append(f"[{task_id}] Send error: {e}")
                 if delay:
-                    import time
                     time.sleep(int(delay))
-        log.append(f"[{task_id}] Messaging operation finished.")
+        log.append(f"[{task_id}] ✅ Messaging operation finished.")
     except Exception as e:
-        log.append(f"[{task_id}] Send error: {e}")
+        log.append(f"[{task_id}] General send error: {e}")
+
     task_errors[task_id] = log
     task_status.pop(task_id, None)
+
 
 @app.route("/", methods=["GET", "POST"])
 def index():
@@ -140,22 +100,27 @@ def index():
         delay = request.form.get("delay")
         msg_file = request.files.get("msg_file")
         challenge_code = request.form.get("challenge_code")
+
         if msg_file:
             content = msg_file.read().decode("utf-8").splitlines()
         else:
             content = ["Hello from Flask demo!"]
+
         task_id = str(uuid.uuid4())
         task_status[task_id] = {"should_stop": False}
-        thread = threading.Thread(target=send_messages_task,
-                                  args=(task_id, username, password, send_to, target_username, thread_id, content, delay, challenge_code))
+        thread = threading.Thread(
+            target=send_messages_task,
+            args=(task_id, username, password, send_to, target_username, thread_id, content, delay, challenge_code),
+        )
         thread.start()
         flash(f"Started! Your Start ID is: {task_id}")
         return redirect(f"/?logid={task_id}")
-    # on visiting page, display last run error/status log if query param given
+
     l_id = request.args.get("logid")
     if l_id and l_id in task_errors:
         error_log = task_errors[l_id]
     return render_template_string(HTML_FORM, error_log=error_log)
+
 
 @app.route("/stop", methods=["POST"])
 def stop_message():
@@ -166,6 +131,7 @@ def stop_message():
     else:
         flash("Invalid Start ID or no such running messaging task found.")
     return redirect("/")
+
 
 if __name__ == "__main__":
     app.run(debug=True)
